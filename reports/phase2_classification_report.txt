@@ -1,0 +1,12 @@
+Phase 2 v2 binary classification report
+Positive class: Phishing. Binary rule: raw P(Legitimate) < 0.5 => Phishing.
+Operational Suspicious predictions are reported separately and are not silently included here.
+
+              precision    recall  f1-score   support
+
+    Phishing   0.999933  1.000000  0.999967     14957
+  Legitimate   1.000000  0.999951  0.999975     20228
+
+    accuracy                       0.999972     35185
+   macro avg   0.999967  0.999975  0.999971     35185
+weighted avg   0.999972  0.999972  0.999972     35185

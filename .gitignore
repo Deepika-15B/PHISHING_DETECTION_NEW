@@ -114,3 +114,5 @@ flask_session/
 .env.*
 secrets.yaml
 config/local*.yaml
+# Runtime logs
+logs/*.log
