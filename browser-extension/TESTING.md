@@ -34,6 +34,15 @@ This document records the end-to-end verification and testing suite performed fo
 | **TEST-24** | Empty History State | No scans performed yet or after Clear History | Shows "No recent scans" title + "Analyze a website to see your scan history here." | **PASS** |
 | **TEST-25** | Accessibility ARIA Labels | Inspect rendered HTML | `aria-label` on Analyze button, `role="progressbar"` with `aria-valuenow/min/max`, `role="alert"` on errors | **PASS** |
 | **TEST-26** | Spinner in Button | Click Analyze while request is in flight | Spinner icon appears inside Analyze button alongside "Analyzing website…" text | **PASS** |
+| **TEST-27** | API Response Schema Validation | Send malformed / empty JSON response to frontend | `isValidPredictionResponse()` catches malformed schema, rejects corrupted payload, shows user-friendly error without crashing | **PASS** |
+| **TEST-28** | Duplicate Click Prevention | Click Analyze multiple times rapidly while request is active | `analyzing` flag and button `disabled` state prevent duplicate requests; exactly 1 API call and 1 history entry generated | **PASS** |
+| **TEST-29** | Stale Response Protection | Initiate new scan before prior slow request returns | In-flight request aborted via `AbortController`, sequence ID checked, older response cannot overwrite newer result | **PASS** |
+| **TEST-30** | Request Timeout Handling | Simulate server delay exceeding 60-second budget | Request automatically aborted by `AbortController`, spinner clears, button re-enabled, displays "Detection request timed out" | **PASS** |
+| **TEST-31** | Connection Refusal / Server Offline | Analyze while Flask is offline (ConnectionRefused) | Error cleanly mapped to "Detection server unavailable" status box; no technical stack trace shown to user | **PASS** |
+| **TEST-32** | Restricted URL History Filter | Attempt saving restricted URL to history | `saveScanItem()` explicitly rejects `chrome://`, `chrome-extension://`, `edge://`, `about:` URLs | **PASS** |
+| **TEST-33** | Malformed Item Storage Protection | Attempt saving empty or undefined prediction item | `saveScanItem()` validates URL and prediction strings before saving, preventing corrupted history entries | **PASS** |
+| **TEST-34** | Storage Exception Resilience | Simulate `chrome.storage.local` failure during save | Storage error caught and logged; prediction result is still rendered successfully in UI | **PASS** |
+| **TEST-35** | Production Build & Type Safety | Run `tsc -b && vite build` in `browser-extension` | 0 TypeScript errors, 0 Vite errors; bundle assets generated cleanly in `dist/` (140ms) | **PASS** |
 
 ---
 
@@ -53,3 +62,4 @@ Flask Server Log Entry:
 ```text
 127.0.0.1 - - [16/Sep/2026 14:24:37] "POST /predict HTTP/1.1" 200 -
 ```
+

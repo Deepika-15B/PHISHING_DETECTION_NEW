@@ -137,6 +137,21 @@ The extension stores scan history in `chrome.storage.local`:
 
 ---
 
+## Reliability & State Handling (Step 9)
+
+The extension includes defensive reliability measures:
+
+- **API Response Validation:** All responses from `/predict` are strictly validated (`isValidPredictionResponse`) before rendering in the UI. If a payload is malformed or missing key fields, the extension safely rejects it with a user-friendly message and avoids adding corrupt data to history.
+- **Request Timeout Handling:** 60-second execution budget enforced via `AbortController`. If exceeded, the request aborts, the loading spinner clears, buttons re-enable, and a clear timeout notification is displayed.
+- **Duplicate Request Prevention:** The *Analyze* and *Analyze Again* buttons are disabled immediately upon click (`aria-busy="true"`). Repeated clicks while a request is in flight are ignored to prevent concurrent duplicate backend calls.
+- **Stale Response Protection:** Every analysis request is tagged with an incremental sequence ID and abort signal. If a new analysis begins or the user switches context, in-flight requests are aborted and older responses cannot overwrite newer results.
+- **Network & Server Offline Handling:** Connection errors (server down, connection refused, CORS/fetch failures) are mapped to structured, actionable messages (`"Detection server unavailable"`).
+- **History & Storage Safety:** History entries require a valid URL and prediction string before saving. Restricted URLs (`chrome://`, `chrome-extension://`, `edge://`, `about:`) and failed requests are strictly barred from history. Storage exceptions are caught gracefully so history errors never break prediction display.
+- **No Automatic Retries:** One click produces exactly one request to avoid spamming the backend or generating duplicate scans.
+
+---
+
 ## Evaluation & Disclaimer
 
 Detection is powered by the project's trained Feedforward Neural Network (FNN). Performance figures are based on the project's evaluated test dataset. This extension does **not** claim 100% protection against all phishing attempts.
+

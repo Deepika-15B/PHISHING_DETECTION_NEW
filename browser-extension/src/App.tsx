@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { predictUrl, type PredictionResponse } from './services/api'
 import {
   getScanHistory,
@@ -20,6 +20,10 @@ function App() {
 
   const [history, setHistory] = useState<ScanHistoryItem[]>([])
 
+  // Tracking refs for stale request cancellation and duplicate prevention
+  const requestIdRef = useRef<number>(0)
+  const abortControllerRef = useRef<AbortController | null>(null)
+
   useEffect(() => {
     // 1. Detect current active tab URL
     if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.query) {
@@ -34,13 +38,14 @@ function App() {
             return
           }
 
-          const url = tab.url
+          const url = tab.url.trim()
 
           if (
             url.startsWith('chrome://') ||
             url.startsWith('chrome-extension://') ||
             url.startsWith('edge://') ||
-            url.startsWith('about:')
+            url.startsWith('about:') ||
+            url === ''
           ) {
             setTabError('restricted')
             setTabLoading(false)
@@ -59,45 +64,91 @@ function App() {
     // 2. Load scan history from local storage
     getScanHistory()
       .then((items) => setHistory(items))
-      .catch((err) => console.error('Failed to load history on popup init:', err))
+      .catch((err) => {
+        console.error('Failed to load history on popup init:', err)
+        setHistory([])
+      })
+
+    // Cleanup in-flight requests on unmount
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
   }, [])
 
   const handleAnalyze = async () => {
+    // Prevent duplicate requests and restricted/invalid URL scans
     if (!currentUrl || tabError || analyzing) return
+
+    // Cancel any previous in-flight request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    const currentRequestId = ++requestIdRef.current
 
     setAnalyzing(true)
     setApiError('')
     setResult(null)
 
     try {
-      const response = await predictUrl(currentUrl)
+      const response = await predictUrl(currentUrl, 60000, controller.signal)
+
+      // Stale response check: ignore if a newer request superseded this one
+      if (currentRequestId !== requestIdRef.current) {
+        return
+      }
+
       setResult(response)
 
       // Save valid API response to local storage history
-      if (response.prediction) {
-        const updatedHistory = await saveScanItem({
-          url: currentUrl,
-          prediction: response.prediction,
-          confidence: response.confidence,
-          risk_level: response.risk_level,
-          phishing_probability: response.phishing_probability,
-          threat_score: typeof response.threat_score === 'number' ? response.threat_score : undefined,
-        })
-        setHistory(updatedHistory)
+      if (response.prediction && typeof response.prediction === 'string') {
+        try {
+          const updatedHistory = await saveScanItem({
+            url: currentUrl,
+            prediction: response.prediction,
+            confidence: response.confidence,
+            risk_level: response.risk_level,
+            phishing_probability: response.phishing_probability,
+            threat_score: typeof response.threat_score === 'number' ? response.threat_score : undefined,
+          })
+          if (currentRequestId === requestIdRef.current) {
+            setHistory(updatedHistory)
+          }
+        } catch (storageErr) {
+          console.error('History storage error (non-fatal):', storageErr)
+        }
       }
     } catch (err: unknown) {
+      // Stale response check: ignore errors if request was cancelled or superseded
+      if (currentRequestId !== requestIdRef.current) {
+        return
+      }
+
       if (err instanceof Error) {
+        if (err.message === 'Request cancelled.') {
+          return
+        }
         setApiError(err.message)
       } else {
         setApiError('An unexpected error occurred.')
       }
     } finally {
-      setAnalyzing(false)
+      if (currentRequestId === requestIdRef.current) {
+        setAnalyzing(false)
+      }
     }
   }
 
   const handleClearHistory = async () => {
-    await clearScanHistory()
+    try {
+      await clearScanHistory()
+    } catch (err) {
+      console.error('Error clearing history:', err)
+    }
     setHistory([])
   }
 
@@ -129,14 +180,42 @@ function App() {
   }
 
   const formatPhishingProb = (prob?: number) => {
-    if (typeof prob !== 'number') return null
+    if (typeof prob !== 'number' || isNaN(prob)) return null
     return `${(prob * 100).toFixed(1)}%`
   }
 
   const confidencePct =
-    typeof result?.confidence === 'number'
+    typeof result?.confidence === 'number' && !isNaN(result.confidence)
       ? Math.min(100, Math.max(0, result.confidence))
       : 0
+
+  const renderApiErrorBox = () => {
+    if (!apiError || analyzing) return null
+
+    let title = 'Detection server unavailable'
+    let desc = 'Unable to connect to the local detection server. Make sure Flask is running and try again.'
+
+    if (apiError.includes('timed out') || apiError.includes('timeout')) {
+      title = 'Detection request timed out'
+      desc = 'Please make sure the Flask server is running and try again.'
+    } else if (apiError.includes('Invalid response')) {
+      title = 'Invalid server response'
+      desc = 'Received an unexpected or malformed response from the detection server. Please try again.'
+    } else if (apiError.includes('Current page unavailable')) {
+      title = 'Current page unavailable'
+      desc = 'Chrome does not provide this page URL to the extension.'
+    } else if (apiError.includes('status') || apiError.includes('encountered an error')) {
+      title = 'Detection server error'
+      desc = apiError
+    }
+
+    return (
+      <div className="status-box status-box--error api-error-box" role="alert">
+        <p className="status-title">{title}</p>
+        <p className="status-desc">{desc}</p>
+      </div>
+    )
+  }
 
   return (
     <div className="popup-container">
@@ -204,14 +283,7 @@ function App() {
         </section>
 
         {/* ── API / Connection Error ── */}
-        {apiError && !analyzing && (
-          <div className="status-box status-box--error api-error-box" role="alert">
-            <p className="status-title">Detection server unavailable</p>
-            <p className="status-desc">
-              Make sure the Flask server is running at http://127.0.0.1:5000 and try again.
-            </p>
-          </div>
-        )}
+        {renderApiErrorBox()}
 
         {/* ── Security Result Card ── */}
         {result && !analyzing && (
@@ -223,7 +295,7 @@ function App() {
               <span className={`badge badge-lg ${getPredictionClass(result.prediction)}`}>
                 {result.prediction || 'Unknown'}
               </span>
-              {typeof result.confidence === 'number' && (
+              {typeof result.confidence === 'number' && !isNaN(result.confidence) && (
                 <span className="confidence-label">
                   {result.confidence.toFixed(1)}% confidence
                 </span>
@@ -231,7 +303,7 @@ function App() {
             </div>
 
             {/* Confidence progress bar */}
-            {typeof result.confidence === 'number' && (
+            {typeof result.confidence === 'number' && !isNaN(result.confidence) && (
               <div
                 className="confidence-bar"
                 role="progressbar"
@@ -256,14 +328,14 @@ function App() {
                 </span>
               </div>
 
-              {typeof result.phishing_probability === 'number' && (
+              {typeof result.phishing_probability === 'number' && !isNaN(result.phishing_probability) && (
                 <div className="result-item">
                   <span className="result-label">Phishing Probability</span>
                   <span className="result-value">{formatPhishingProb(result.phishing_probability)}</span>
                 </div>
               )}
 
-              {typeof result.threat_score === 'number' && (
+              {typeof result.threat_score === 'number' && !isNaN(result.threat_score) && (
                 <div className="result-item">
                   <span className="result-label">Threat Score</span>
                   <span className="result-value">{result.threat_score.toFixed(1)} / 100</span>
@@ -338,7 +410,9 @@ function App() {
                   </div>
                   <div className="history-item-bottom">
                     <span className="history-details">
-                      {typeof item.confidence === 'number' ? `${item.confidence.toFixed(1)}% confidence` : ''}
+                      {typeof item.confidence === 'number' && !isNaN(item.confidence)
+                        ? `${item.confidence.toFixed(1)}% confidence`
+                        : ''}
                       {item.risk_level ? ` · ${item.risk_level} Risk` : ''}
                     </span>
                     <span className="history-time">{formatTimestamp(item.timestamp)}</span>
