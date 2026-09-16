@@ -88,42 +88,55 @@ Confirm that the server is running locally at `http://127.0.0.1:5000`.
 ## Using the Extension
 
 1. Navigate to any website in Chrome (e.g. `https://example.com/`).
-2. Click the **Phishing Website Detector** shield icon in the Chrome toolbar.
+2. Click the **Phishing Detector** shield icon in the Chrome toolbar.
 3. The popup automatically reads and displays the active tab URL.
 4. Click **Analyze Website**.
-5. The extension sends a `POST /predict` request to the backend. While processing, the button displays "Analyzing website...".
-6. The prediction result card appears displaying the classification, confidence score, risk level, phishing probability, and threat score (if returned by backend).
-7. Successful scans are automatically recorded in **Recent Scans**.
+5. While the backend processes the URL, the button shows a spinner: *"Analyzing website…"*
+6. The **Security Result** card appears with:
+   - **Prediction badge** (Legitimate / Phishing / Suspicious / Unknown) with semantic colour coding
+   - **Confidence progress bar** whose fill colour matches the prediction
+   - **Risk Level** badge (Low / Medium / High / Unknown)
+   - **Phishing Probability** as a percentage
+   - **Threat Score** as *X / 100* (only shown when returned by the backend)
+   - **Analyzed URL** in monospace
+   - **Why this result?** — bullet list of reasons returned by the backend
+   - **Analyze Again** button to re-scan the same page
+7. Successful scans are automatically saved to **Recent Scans**.
 
 ---
 
 ## Recent Scans & Local Storage
 
-The extension features a lightweight local scan history stored asynchronously in `chrome.storage.local`:
+The extension stores scan history in `chrome.storage.local`:
 
-- **Capacity:** Stores up to a maximum of **10 records**. When an 11th scan occurs, the oldest record is automatically removed.
-- **Privacy & Security:** Only non-sensitive scan metadata (`url`, `prediction`, `confidence`, `risk_level`, `phishing_probability`, `threat_score`, `timestamp`) is saved. No cookies, page source, credentials, or browsing history are ever collected or stored.
-- **Clear History:** Users can click **Clear History** in the extension popup to instantly remove all stored scans from `chrome.storage.local`.
+- **Capacity:** Maximum of **10 records**. When an 11th scan occurs the oldest record is automatically removed.
+- **Privacy & Security:** Only non-sensitive scan metadata (`url`, `prediction`, `confidence`, `risk_level`, `phishing_probability`, `threat_score`, `timestamp`) is stored. No cookies, page source, credentials, or full browsing history are collected.
+- **Empty state:** Displays *"No recent scans / Analyze a website to see your scan history here."* when history is empty.
+- **Clear History:** Click **Clear History** to instantly purge all stored records from `chrome.storage.local`.
 
 ---
 
 ## Expected Prediction Outcomes
 
-- **Legitimate:** Website classified as safe with high probability (green badge).
-- **Phishing:** Website classified as suspicious or malicious based on extracted URL/HTML features (red badge).
-- **Suspicious:** Borderline feature patterns requiring user caution (amber badge).
-- **Unknown:** Returned when a website is unreachable, incomplete, or protected by anti-bot challenge pages (e.g. Cloudflare / AWS WAF) (neutral badge).
+| Prediction | Badge Colour | Meaning |
+|:---|:---|:---|
+| **Legitimate** | Green | Classified as safe |
+| **Phishing** | Red | High-risk / malicious indicators detected |
+| **Suspicious** | Amber | Borderline patterns — proceed with caution |
+| **Unknown** | Grey | Unreachable, incomplete, or bot-protected page |
 
 ---
 
 ## Error Handling
 
-- **Flask Server Offline:** Displays `"Unable to connect to the detection server."` (no history entry created).
-- **Request Timeout:** 60-second limit via `AbortController`. Displays `"Analysis timed out. Please make sure the Flask detection server is running and try again."`
-- **Restricted Chrome Pages:** Chrome internal pages (`chrome://`, `chrome-extension://`, `about:`) display `"Current tab URL is unavailable."` without calling the API or creating history records.
+| Scenario | Displayed Message |
+|:---|:---|
+| Flask server offline | *"Detection server unavailable — Make sure the Flask server is running at http://127.0.0.1:5000 and try again."* |
+| 60-second timeout | *"Analysis timed out. Please make sure the Flask detection server is running and try again."* |
+| Restricted Chrome page | *"Current page unavailable — Chrome does not provide this page URL to the extension."* |
 
 ---
 
 ## Evaluation & Disclaimer
 
-The detection capabilities are powered by the project's trained Feedforward Neural Network (FNN) evaluated on standard phishing benchmarks. Documented performance is based on the project's evaluated test dataset and does not constitute a 100% guarantee for every real-world URL.
+Detection is powered by the project's trained Feedforward Neural Network (FNN). Performance figures are based on the project's evaluated test dataset. This extension does **not** claim 100% protection against all phishing attempts.

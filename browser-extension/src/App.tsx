@@ -29,7 +29,7 @@ function App() {
           const tab = tabs[0]
 
           if (!tab || !tab.url) {
-            setTabError('Current tab URL is unavailable.')
+            setTabError('restricted')
             setTabLoading(false)
             return
           }
@@ -42,7 +42,7 @@ function App() {
             url.startsWith('edge://') ||
             url.startsWith('about:')
           ) {
-            setTabError('Current tab URL is unavailable.')
+            setTabError('restricted')
             setTabLoading(false)
             return
           }
@@ -52,7 +52,7 @@ function App() {
         }
       )
     } else {
-      setTabError('Unable to detect current tab URL.')
+      setTabError('restricted')
       setTabLoading(false)
     }
 
@@ -103,51 +103,85 @@ function App() {
 
   const getPredictionClass = (prediction?: string) => {
     switch (prediction?.toLowerCase()) {
-      case 'legitimate':
-        return 'badge-legitimate'
-      case 'phishing':
-        return 'badge-phishing'
-      case 'suspicious':
-        return 'badge-suspicious'
-      default:
-        return 'badge-unknown'
+      case 'legitimate': return 'badge-legitimate'
+      case 'phishing':   return 'badge-phishing'
+      case 'suspicious': return 'badge-suspicious'
+      default:           return 'badge-unknown'
     }
   }
 
-  // Format phishing probability as percentage if present
+  const getRiskClass = (risk?: string) => {
+    switch (risk?.toLowerCase()) {
+      case 'low':    return 'risk-low'
+      case 'medium': return 'risk-medium'
+      case 'high':   return 'risk-high'
+      default:       return 'risk-unknown'
+    }
+  }
+
+  const getConfidenceBarClass = (prediction?: string) => {
+    switch (prediction?.toLowerCase()) {
+      case 'legitimate': return 'confidence-fill--legitimate'
+      case 'phishing':   return 'confidence-fill--phishing'
+      case 'suspicious': return 'confidence-fill--suspicious'
+      default:           return 'confidence-fill--unknown'
+    }
+  }
+
   const formatPhishingProb = (prob?: number) => {
     if (typeof prob !== 'number') return null
-    const pct = (prob * 100).toFixed(1)
-    return `${pct}%`
+    return `${(prob * 100).toFixed(1)}%`
   }
+
+  const confidencePct =
+    typeof result?.confidence === 'number'
+      ? Math.min(100, Math.max(0, result.confidence))
+      : 0
 
   return (
     <div className="popup-container">
+      {/* ── Header ── */}
       <header className="popup-header">
-        <span className="header-icon" role="img" aria-label="shield">🛡️</span>
-        <h1>Phishing Website Detector</h1>
+        <div className="header-shield" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="shield-svg">
+            <path d="M12 2L3 6v6c0 5.25 3.75 10.15 9 11.25C17.25 22.15 21 17.25 21 12V6L12 2z"
+              fill="currentColor" opacity="0.15" />
+            <path d="M12 2L3 6v6c0 5.25 3.75 10.15 9 11.25C17.25 22.15 21 17.25 21 12V6L12 2z"
+              stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" fill="none" />
+            <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="1.5"
+              strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+        <div className="header-text">
+          <h1>Phishing Detector</h1>
+          <p className="header-subtitle">AI-powered website security</p>
+        </div>
       </header>
 
       <main className="popup-content">
-        {/* Section 1: Current Website */}
-        <section className="section">
-          <h2>Current Website</h2>
+
+        {/* ── Current Website Card ── */}
+        <section className="section" aria-label="Current Website">
+          <h2 className="section-title">Current Website</h2>
 
           {tabLoading && (
-            <div className="status-box loading">
-              <p>Reading current tab...</p>
+            <div className="status-box status-box--info" role="status">
+              <p>Reading current tab…</p>
             </div>
           )}
 
-          {tabError && (
-            <div className="status-box error">
-              <p>{tabError}</p>
+          {tabError === 'restricted' && (
+            <div className="status-box status-box--warning" role="alert">
+              <p className="status-title">Current page unavailable</p>
+              <p className="status-desc">
+                Chrome does not provide this page URL to the extension.
+              </p>
             </div>
           )}
 
           {!tabLoading && !tabError && (
             <>
-              <div className="url-container">
+              <div className="url-container" aria-label="Current URL">
                 <p className="url-text">{currentUrl}</p>
               </div>
 
@@ -156,70 +190,83 @@ function App() {
                 className="analyze-button"
                 onClick={handleAnalyze}
                 disabled={analyzing || !currentUrl}
+                aria-label="Analyze current website for phishing"
+                aria-busy={analyzing}
               >
-                {analyzing ? 'Analyzing website...' : 'Analyze Website'}
+                {analyzing ? (
+                  <><span className="spinner" aria-hidden="true" /> Analyzing website…</>
+                ) : (
+                  'Analyze Website'
+                )}
               </button>
             </>
           )}
         </section>
 
-        {/* Loading Indicator */}
-        {analyzing && (
-          <div className="status-box loading analyzing-box">
-            <div className="spinner" />
-            <p>Analyzing website...</p>
-          </div>
-        )}
-
-        {/* API Error Box */}
+        {/* ── API / Connection Error ── */}
         {apiError && !analyzing && (
-          <div className="status-box error api-error-box">
-            <p>{apiError}</p>
+          <div className="status-box status-box--error api-error-box" role="alert">
+            <p className="status-title">Detection server unavailable</p>
+            <p className="status-desc">
+              Make sure the Flask server is running at http://127.0.0.1:5000 and try again.
+            </p>
           </div>
         )}
 
-        {/* Section 2: Detection Result Card */}
+        {/* ── Security Result Card ── */}
         {result && !analyzing && (
-          <section className="section result-section">
-            <h2>Detection Result</h2>
+          <section className="section result-section" aria-label="Security Result">
+            <h2 className="section-title">Security Result</h2>
 
+            {/* Prediction badge + confidence label */}
+            <div className="result-hero">
+              <span className={`badge badge-lg ${getPredictionClass(result.prediction)}`}>
+                {result.prediction || 'Unknown'}
+              </span>
+              {typeof result.confidence === 'number' && (
+                <span className="confidence-label">
+                  {result.confidence.toFixed(1)}% confidence
+                </span>
+              )}
+            </div>
+
+            {/* Confidence progress bar */}
+            {typeof result.confidence === 'number' && (
+              <div
+                className="confidence-bar"
+                role="progressbar"
+                aria-valuenow={confidencePct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`Confidence: ${result.confidence.toFixed(1)}%`}
+              >
+                <div
+                  className={`confidence-fill ${getConfidenceBarClass(result.prediction)}`}
+                  style={{ width: `${confidencePct}%` }}
+                />
+              </div>
+            )}
+
+            {/* Detail rows */}
             <div className="result-grid">
               <div className="result-item">
-                <span className="result-label">Prediction</span>
-                <span className={`badge ${getPredictionClass(result.prediction)}`}>
-                  {result.prediction || 'Unknown'}
-                </span>
-              </div>
-
-              <div className="result-item">
-                <span className="result-label">Confidence</span>
-                <span className="result-value">
-                  {typeof result.confidence === 'number' ? `${result.confidence}%` : 'N/A'}
-                </span>
-              </div>
-
-              <div className="result-item">
                 <span className="result-label">Risk Level</span>
-                <span className="result-value">
+                <span className={`risk-badge ${getRiskClass(result.risk_level)}`}>
                   {result.risk_level || 'Unknown'}
                 </span>
               </div>
 
               {typeof result.phishing_probability === 'number' && (
                 <div className="result-item">
-                  <span className="result-label">Phishing Prob.</span>
-                  <span className="result-value">
-                    {formatPhishingProb(result.phishing_probability)}
-                  </span>
+                  <span className="result-label">Phishing Probability</span>
+                  <span className="result-value">{formatPhishingProb(result.phishing_probability)}</span>
                 </div>
               )}
 
               {typeof result.threat_score === 'number' && (
                 <div className="result-item">
                   <span className="result-label">Threat Score</span>
-                  <span className="result-value">
-                    {result.threat_score} / 100
-                  </span>
+                  <span className="result-value">{result.threat_score.toFixed(1)} / 100</span>
                 </div>
               )}
 
@@ -231,23 +278,41 @@ function App() {
               </div>
             </div>
 
+            {/* Why this result? */}
             {result.reason && Array.isArray(result.reason) && result.reason.length > 0 && (
-              <div className="reason-container">
-                <p className="reason-text">{result.reason[0]}</p>
+              <div className="reasons-container">
+                <p className="reasons-heading">Why this result?</p>
+                <ul className="reasons-list" aria-label="Detection reasons">
+                  {result.reason.map((r, i) => (
+                    <li key={i} className="reasons-item">{r}</li>
+                  ))}
+                </ul>
               </div>
             )}
+
+            {/* Analyze Again */}
+            <button
+              type="button"
+              className="analyze-again-button"
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              aria-label="Analyze this website again"
+            >
+              Analyze Again
+            </button>
           </section>
         )}
 
-        {/* Section 3: Recent Scans History */}
-        <section className="section history-section">
+        {/* ── Recent Scans History ── */}
+        <section className="section history-section" aria-label="Recent Scans">
           <div className="section-header">
-            <h2>Recent Scans</h2>
+            <h2 className="section-title">Recent Scans</h2>
             {history.length > 0 && (
               <button
                 type="button"
                 className="clear-history-button"
                 onClick={handleClearHistory}
+                aria-label="Clear scan history"
               >
                 Clear History
               </button>
@@ -255,9 +320,12 @@ function App() {
           </div>
 
           {history.length === 0 ? (
-            <p className="no-history-text">No recent scans.</p>
+            <div className="empty-history">
+              <p className="empty-history-title">No recent scans</p>
+              <p className="empty-history-desc">Analyze a website to see your scan history here.</p>
+            </div>
           ) : (
-            <ul className="history-list">
+            <ul className="history-list" aria-label="Scan history">
               {history.map((item) => (
                 <li key={item.id} className="history-item">
                   <div className="history-item-top">
@@ -270,8 +338,8 @@ function App() {
                   </div>
                   <div className="history-item-bottom">
                     <span className="history-details">
-                      {typeof item.confidence === 'number' ? `${item.confidence}% confidence` : ''}
-                      {item.risk_level ? ` • ${item.risk_level} Risk` : ''}
+                      {typeof item.confidence === 'number' ? `${item.confidence.toFixed(1)}% confidence` : ''}
+                      {item.risk_level ? ` · ${item.risk_level} Risk` : ''}
                     </span>
                     <span className="history-time">{formatTimestamp(item.timestamp)}</span>
                   </div>
@@ -280,6 +348,7 @@ function App() {
             </ul>
           )}
         </section>
+
       </main>
     </div>
   )
