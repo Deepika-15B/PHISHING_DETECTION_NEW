@@ -43,6 +43,21 @@ This document records the end-to-end verification and testing suite performed fo
 | **TEST-33** | Malformed Item Storage Protection | Attempt saving empty or undefined prediction item | `saveScanItem()` validates URL and prediction strings before saving, preventing corrupted history entries | **PASS** |
 | **TEST-34** | Storage Exception Resilience | Simulate `chrome.storage.local` failure during save | Storage error caught and logged; prediction result is still rendered successfully in UI | **PASS** |
 | **TEST-35** | Production Build & Type Safety | Run `tsc -b && vite build` in `browser-extension` | 0 TypeScript errors, 0 Vite errors; bundle assets generated cleanly in `dist/` (140ms) | **PASS** |
+| **TEST-36** | Production Build Verification | Run `npm run build` in `browser-extension/` | Build succeeds with zero TypeScript / Vite errors; `dist/` generated with index.html, assets, manifest.json | **PASS** |
+| **TEST-37** | Production Manifest Verification | Inspect `dist/manifest.json` | Valid Manifest V3, permissions `["activeTab", "storage"]`, host permission `["http://127.0.0.1:5000/*"]` | **PASS** |
+| **TEST-38** | Production Extension Load | Load `dist/` folder via Chrome `chrome://extensions` (Developer mode) | Extension loads cleanly with icon and title, 0 manifest warnings, 0 asset errors | **PASS** |
+| **TEST-39** | End-to-End Benign Prediction | Popup sends `https://example.com/` to `http://127.0.0.1:5000/predict` | HTTP 200 returned, FNN model executed, prediction `Legitimate` (92.55% confidence, Low risk) displayed on Security Result card | **PASS** |
+| **TEST-40** | Successful Scan History | Verify history entry creation after successful scan | Exactly 1 history record created in `chrome.storage.local` with full metadata, prepended as newest scan | **PASS** |
+| **TEST-41** | History Persistence | Close popup and reopen on any tab | Stored history loaded asynchronously on mount and displayed correctly under Recent Scans | **PASS** |
+| **TEST-42** | Clear History | Click "Clear History" button | `chrome.storage.local` purged, UI immediately updates to "No recent scans" empty state | **PASS** |
+| **TEST-43** | Offline Server Handling | Click Analyze when Flask is stopped | Displays friendly "Detection server unavailable" status box; no crash, no corrupt history | **PASS** |
+| **TEST-44** | Timeout Handling | Request exceeding 60-second limit | Request automatically aborted by `AbortController`, spinner clears, button re-enabled, no history record | **PASS** |
+| **TEST-45** | Restricted URL Handling | Open popup on `chrome://extensions` | Displays "Current page unavailable", API call prevented, no history modification | **PASS** |
+| **TEST-46** | Tab URL Consistency | Switch between tabs and open popup | Popup dynamically reads active tab URL via `chrome.tabs.query()`, no stale URL reuse | **PASS** |
+| **TEST-47** | Long URL Layout | Analyze safe URL with long query string | Text wraps cleanly (`word-break: break-all`) within 360px popup width without horizontal overflow | **PASS** |
+| **TEST-48** | Final UI/Accessibility Review | Inspect UI hierarchy and accessibility | Valid heading structure, ARIA attributes (`aria-label`, `aria-busy`, `role="progressbar"`, `role="alert"`), high contrast colors | **PASS** |
+| **TEST-49** | Production Console Review | Inspect Chrome DevTools console on popup | Zero unhandled exceptions, zero missing asset 404s, clean initialization | **PASS** |
+| **TEST-50** | Protected System Integrity | Check backend, models, datasets, utils, and original repo | All backend ML components, FNN weights, scaler, Top-20 features, and original benchmark repository remain 100% untouched | **PASS** |
 
 ---
 
@@ -62,4 +77,5 @@ Flask Server Log Entry:
 ```text
 127.0.0.1 - - [16/Sep/2026 14:24:37] "POST /predict HTTP/1.1" 200 -
 ```
+
 

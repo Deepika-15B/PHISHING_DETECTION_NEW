@@ -151,7 +151,23 @@ The extension includes defensive reliability measures:
 
 ---
 
+## Step 10 — Final End-to-End Verification
+
+The Chrome Manifest V3 extension has been verified for production demonstration readiness:
+
+- **Production Build:** `npm run build` compiles cleanly into `dist/` with 0 TypeScript and 0 Vite errors.
+- **Manifest V3 Package:** `dist/manifest.json` conforms strictly to Manifest V3 specifications with minimal required permissions (`activeTab`, `storage`) and explicit host permissions (`http://127.0.0.1:5000/*`).
+- **Chrome Extension Loading:** The unpacked extension in `dist/` loads into Google Chrome (`chrome://extensions`) without manifest warnings or console exceptions.
+- **Flask API & ML Integration:** Live end-to-end communication verified with `POST http://127.0.0.1:5000/predict` serving the protected Feedforward Neural Network (FNN) and Top-20 HTML/URL feature pipeline.
+- **Security Result Card:** Renders live backend predictions, confidence levels, per-prediction colored progress bar, risk levels, and explanation reasons with zero hardcoding or probability distortion.
+- **State & History Safety:** Recent scans persist in `chrome.storage.local` (capped at 10 items) with single-click purge. In-flight requests are protected against stale overwrites and duplicate submissions.
+- **Error & Offline Handling:** Connection refusal, 60s timeout, malformed payloads, and internal browser pages (`chrome://`) are cleanly handled with clear notifications.
+- **Protected System Integrity:** All backend files (`backend/`, `models/`, `utils/`, datasets) and the original benchmark repository remained 100% untouched.
+
+---
+
 ## Evaluation & Disclaimer
 
 Detection is powered by the project's trained Feedforward Neural Network (FNN). Performance figures are based on the project's evaluated test dataset. This extension does **not** claim 100% protection against all phishing attempts.
+
 
